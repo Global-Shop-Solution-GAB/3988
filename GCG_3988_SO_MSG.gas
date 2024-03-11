@@ -1,0 +1,211 @@
+Program.Sub.ScreenSU.Start
+gui.Form1..create
+gui.Form1..caption("Warning!")
+gui.Form1..size(3675,2295)
+gui.Form1..minx(0)
+gui.Form1..miny(0)
+gui.Form1..position(0,0)
+gui.Form1..event(unload,form1_unload)
+gui.Form1..alwaysontop(False)
+gui.Form1..fontname("Arial")
+gui.Form1..fontsize(8)
+gui.Form1..forecolor(0)
+gui.Form1..fontstyle(,,,,)
+gui.Form1..BackColor(-2147483633)
+gui.Form1..controlbox(True)
+gui.Form1..maxbutton(True)
+gui.Form1..minbutton(True)
+gui.Form1..mousepointer(0)
+gui.Form1..moveable(True)
+gui.Form1..sizeable(True)
+gui.Form1..ShowInTaskBar(True)
+gui.Form1..titlebar(True)
+gui.Form1.cmdContinue.create(button)
+gui.Form1.cmdContinue.caption("Continue")
+gui.Form1.cmdContinue.visible(True)
+gui.Form1.cmdContinue.size(900,450)
+gui.Form1.cmdContinue.zorder(0)
+gui.Form1.cmdContinue.position(315,1025)
+gui.Form1.cmdContinue.enabled(True)
+gui.Form1.cmdContinue.fontname("Arial")
+gui.Form1.cmdContinue.fontsize(8)
+gui.Form1.cmdContinue.event(click,cmdcontinue_click)
+gui.Form1.cmdContinue.defaultvalue("")
+gui.Form1.cmdContinue.controlgroup(0)
+gui.Form1.cmdCancel.create(button)
+gui.Form1.cmdCancel.caption("Cancel")
+gui.Form1.cmdCancel.visible(True)
+gui.Form1.cmdCancel.size(900,450)
+gui.Form1.cmdCancel.zorder(0)
+gui.Form1.cmdCancel.position(2150,1010)
+gui.Form1.cmdCancel.enabled(True)
+gui.Form1.cmdCancel.fontname("Arial")
+gui.Form1.cmdCancel.fontsize(8)
+gui.Form1.cmdCancel.event(click,cmdcancel_click)
+gui.Form1.cmdCancel.defaultvalue("")
+gui.Form1.cmdCancel.controlgroup(0)
+gui.Form1.lblPart.create(label,"Will not meet promise date specified",True,3000,450,1,300,365,True,0,Arial,8,-2147483633,0)
+gui.Form1.lblPart.defaultvalue("")
+gui.Form1.lblPart.controlgroup(0)
+
+
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Variable.UDT.uItem.Define("sPROM_DATE",String,sPROM_DATE)
+Variable.UDT.uItem.Define("sORDERNUM",String,sORDERNUM)
+Variable.uGlobal.uItem.Declare("uItem")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+'Coded by: WAW
+'Date: 04/09/2015
+V.Local.spartnum.Declare(String)
+V.Local.dpromdate.Declare(String)
+V.Local.scode.Declare(String)
+V.Local.ssql.Declare(String)
+V.Local.sqtyreord.Declare(String)
+V.Local.idatediff.Declare(Long)
+V.Local.dactualdate.Declare(Date)
+V.Local.sloc.Declare(String)
+V.Local.sbom.Declare(String)
+V.Local.sordernum.Declare(String)
+V.Local.sbomparent.Declare(String)
+V.Local.sitempromdate.Declare(String)
+V.Local.i.Declare(Long)
+V.Local.icount.Declare(Long)
+
+'open connection to the database
+F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+'set local variables
+V.Local.sordernum.Set(V.Passed.000060.Trim)
+F.Intrinsic.String.LPad(V.Local.sordernum,"0",7,V.Local.sordernum)
+
+F.Intrinsic.Control.if(V.Caller.Hook,=,12230)
+	'get the part and promise date to check against
+	F.Intrinsic.String.Build("select ORDER_NO, PART, DATE_ITEM_PROM from ORDER_LINES where ORDER_NO = '{0}' and FLAG_BOM = '{1}'",V.Local.sordernum,"Y",V.Local.ssql)
+		F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.ssql)
+		F.Intrinsic.Control.If(V.ODBC.con!rst.EOF,=,False)
+			V.Local.spartnum.Set(V.ODBC.con!rst.FieldValTrim!PART)
+			V.Local.dpromdate.Set(V.ODBC.con!rst.FieldValTrim!DATE_ITEM_PROM)
+			'convert the dates and calculate the workdays between
+			F.intrinsic.Date.ConvertDString(V.Local.dpromdate,"YYYYMMDD",V.Local.dpromdate)
+			F.Intrinsic.Date.WorkdaysBetweenDates(V.Ambient.Date,V.Local.dpromdate,V.Local.idatediff)
+			F.ODBC.con!rst.Close
+		F.Intrinsic.Control.Else
+			F.ODBC.con!rst.Close
+	F.Intrinsic.Control.EndIf
+	'get the qty reorder to check against
+	F.Intrinsic.String.Build("select QTY_REORDER from INVENTORY_MSTR where PART = '{0}'",V.Local.spartnum,V.Local.ssql)
+		F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.ssql)
+		F.Intrinsic.Control.If(V.ODBC.con!rst.EOF,=,False)
+			V.Local.sqtyreord.Set(V.ODBC.con!rst.FieldValTrim!QTY_REORDER)
+			'if the reorder point is equal to 0 and the workday difference is greater than 20 display the message
+			F.Intrinsic.Control.If(V.Local.sqtyreord,=,0,"and",V.Local.idatediff,>,20)
+				Gui.Form1..Visible(true)
+			F.Intrinsic.Control.EndIf
+			'If the reorder point is greater than 0 the finished good is "Type 1" and allows for 10 business days until promise date
+			F.Intrinsic.Control.If(V.Local.sqtyreord,>,0)
+			F.Intrinsic.Control.AndIf(V.Local.idatediff,>,10)
+				Gui.Form1..Visible(true)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.con!rst.Close
+		F.Intrinsic.Control.Else
+			F.ODBC.con!rst.Close
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3988_SO_MSG.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Main.End
+
+program.sub.form1_unload.start
+F.Intrinsic.Control.SetErrorHandler("form1_unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+'closes the program
+F.Intrinsic.Control.End
+
+'closes the connection to the database
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("form1_unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3988_SO_MSG.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.form1_unload.end
+
+program.sub.cmdcontinue_click.start
+F.Intrinsic.Control.SetErrorHandler("cmdcontinue_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+'close the program	
+F.Intrinsic.Control.CallSub(Form1_unload)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdcontinue_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3988_SO_MSG.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmdcontinue_click.end
+
+program.sub.cmdcancel_click.start
+F.Intrinsic.Control.SetErrorHandler("cmdcancel_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,12230)
+
+'set the override flag to 1
+V.Passed.777777.Set(1)
+
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(Form1_unload)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdcancel_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3988_SO_MSG.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmdcancel_click.end
+
+Program.Sub.Comments.Start
+${$0$}$GCG_PIN_SO_MSG$}$WAW$}$4/9/2015
+Program.Sub.Comments.End
+
